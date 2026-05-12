@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Handler
 import android.os.Message
 import android.os.SystemClock
+import android.provider.Settings
 import io.github.libxposed.api.XposedModule
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -257,13 +258,33 @@ internal object PowerHooks {
     }
 
     private fun resolvePreferredAssistantPackage(context: Context): String? {
+        val chatGptInstalled = HookSupport.isPackageInstalled(context, ModuleConfig.CHATGPT_PACKAGE)
+        if (chatGptInstalled &&
+            (isAssistantConfiguredForPackage(context, ModuleConfig.CHATGPT_PACKAGE) ||
+                supportsAssistantActivity(context, ModuleConfig.CHATGPT_PACKAGE))
+        ) {
+            return ModuleConfig.CHATGPT_PACKAGE
+        }
+
         return when {
-            HookSupport.isPackageInstalled(context, ModuleConfig.CHATGPT_PACKAGE) ->
-                ModuleConfig.CHATGPT_PACKAGE
             HookSupport.isPackageInstalled(context, ModuleConfig.GOOGLE_PACKAGE) ->
                 ModuleConfig.GOOGLE_PACKAGE
             else -> null
         }
+    }
+
+    private fun supportsAssistantActivity(context: Context, packageName: String): Boolean {
+        val assistIntent = Intent(Intent.ACTION_ASSIST).setPackage(packageName)
+        val voiceIntent = Intent(Intent.ACTION_VOICE_COMMAND).setPackage(packageName)
+        return HookSupport.resolvesActivity(context, assistIntent) ||
+            HookSupport.resolvesActivity(context, voiceIntent)
+    }
+
+    private fun isAssistantConfiguredForPackage(context: Context, packageName: String): Boolean {
+        val configuredAssistant = runCatching {
+            Settings.Secure.getString(context.contentResolver, ModuleConfig.SECURE_ASSISTANT)
+        }.getOrNull()
+        return configuredAssistant == packageName || configuredAssistant?.startsWith("$packageName/") == true
     }
 
     private fun finalizeSuccessfulLaunch(
