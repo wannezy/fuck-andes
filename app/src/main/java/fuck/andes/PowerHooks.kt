@@ -107,10 +107,15 @@ internal object PowerHooks {
             return LaunchResult.NOT_HANDLED
         }
 
-        if (!HookSupport.isPackageInstalled(context, ModuleConfig.GOOGLE_PACKAGE)) {
-            logger.warnThrottled("${source}_google_missing", "$source: Google App 未安装，回退原逻辑")
+        val preferredAssistantPackage = resolvePreferredAssistantPackage(context)
+        if (preferredAssistantPackage == null) {
+            logger.warnThrottled(
+                "${source}_assistant_missing",
+                "$source: 未安装 ChatGPT/Google，回退原逻辑"
+            )
             return LaunchResult.NOT_HANDLED
         }
+        val googlePreferred = preferredAssistantPackage == ModuleConfig.GOOGLE_PACKAGE
 
         val now = SystemClock.uptimeMillis()
         if (now - lastInterceptUptime <= ModuleConfig.INTERCEPT_DEDUP_WINDOW_MS) {
@@ -118,7 +123,9 @@ internal object PowerHooks {
             return LaunchResult.LAUNCHED
         }
 
-        AssistantManager.ensureGoogleAssistantConfigured(context, logger)
+        if (googlePreferred) {
+            AssistantManager.ensureGoogleAssistantConfigured(context, logger)
+        }
 
         if (tryShowGoogleAssistantSession(
                 context = context,
@@ -129,11 +136,12 @@ internal object PowerHooks {
             )
         ) {
             finalizeSuccessfulLaunch(logger, phoneWindowManager, source, now)
-            logger.debug("$source: 已通过 voiceinteraction 启动 Google")
+            logger.debug("$source: 已通过 voiceinteraction 启动助理")
             return LaunchResult.LAUNCHED
         }
 
-        if (AssistantManager.rebuildVoiceInteractionImplementation(
+        if (googlePreferred &&
+            AssistantManager.rebuildVoiceInteractionImplementation(
                 logger = logger,
                 force = true,
                 logFailures = false
@@ -151,7 +159,8 @@ internal object PowerHooks {
             return LaunchResult.LAUNCHED
         }
 
-        if (AssistantManager.ensureGoogleAssistantConfigured(context, logger, forceRefresh = true) &&
+        if (googlePreferred &&
+            AssistantManager.ensureGoogleAssistantConfigured(context, logger, forceRefresh = true) &&
             AssistantManager.rebuildVoiceInteractionImplementation(
                 logger = logger,
                 force = true,
@@ -170,7 +179,7 @@ internal object PowerHooks {
             return LaunchResult.LAUNCHED
         }
 
-        if (AssistantManager.ensureGoogleAssistantConfigured(context, logger)) {
+        if (googlePreferred && AssistantManager.ensureGoogleAssistantConfigured(context, logger)) {
             lastInterceptUptime = now
             logger.warnThrottled(
                 "${source}_assistant_recovery_pending",
@@ -183,17 +192,27 @@ internal object PowerHooks {
             return LaunchResult.NOT_HANDLED
         }
 
-        if (startGoogleAssistActivity(context, logger, phoneWindowManager, source, now, Intent.ACTION_ASSIST)) {
+        if (startAssistantActivity(
+                context = context,
+                logger = logger,
+                phoneWindowManager = phoneWindowManager,
+                source = source,
+                now = now,
+                action = Intent.ACTION_ASSIST,
+                targetPackage = preferredAssistantPackage
+            )
+        ) {
             return LaunchResult.LAUNCHED
         }
 
-        return if (startGoogleAssistActivity(
+        return if (startAssistantActivity(
                 context,
                 logger,
                 phoneWindowManager,
                 source,
                 now,
-                Intent.ACTION_VOICE_COMMAND
+                Intent.ACTION_VOICE_COMMAND,
+                preferredAssistantPackage
             )
         ) {
             LaunchResult.LAUNCHED
@@ -202,22 +221,23 @@ internal object PowerHooks {
         }
     }
 
-    private fun startGoogleAssistActivity(
+    private fun startAssistantActivity(
         context: Context,
         logger: ModuleLogger,
         phoneWindowManager: Any,
         source: String,
         now: Long,
-        action: String
+        action: String,
+        targetPackage: String
     ): Boolean {
         val intent = Intent(action).apply {
-            setPackage(ModuleConfig.GOOGLE_PACKAGE)
+            setPackage(targetPackage)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         if (!HookSupport.resolvesActivity(context, intent)) {
             logger.warnThrottled(
                 "${source}_${action}_missing",
-                "$source: Google 未暴露 $action，回退原逻辑"
+                "$source: $targetPackage 未暴露 $action，回退原逻辑"
             )
             return false
         }
@@ -225,14 +245,24 @@ internal object PowerHooks {
         return runCatching {
             context.startActivity(intent)
             finalizeSuccessfulLaunch(logger, phoneWindowManager, source, now)
-            logger.debug("$source: 已通过 $action 启动 Google")
+            logger.debug("$source: 已通过 $action 启动 $targetPackage")
             true
         }.getOrElse { throwable ->
             logger.warnThrottled(
                 "${source}_${action}_failed",
-                "$source: $action 启动失败，回退原逻辑: ${throwable.message}"
+                "$source: $targetPackage $action 启动失败，回退原逻辑: ${throwable.message}"
             )
             false
+        }
+    }
+
+    private fun resolvePreferredAssistantPackage(context: Context): String? {
+        return when {
+            HookSupport.isPackageInstalled(context, ModuleConfig.CHATGPT_PACKAGE) ->
+                ModuleConfig.CHATGPT_PACKAGE
+            HookSupport.isPackageInstalled(context, ModuleConfig.GOOGLE_PACKAGE) ->
+                ModuleConfig.GOOGLE_PACKAGE
+            else -> null
         }
     }
 
