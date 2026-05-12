@@ -127,7 +127,7 @@ internal object PowerHooks {
             AssistantManager.ensureGoogleAssistantConfigured(context, logger)
         }
 
-        if (tryShowGoogleAssistantSession(
+        if (tryShowAssistantSession(
                 context = context,
                 logger = logger,
                 source = source,
@@ -146,7 +146,7 @@ internal object PowerHooks {
                 force = true,
                 logFailures = false
             ) &&
-            tryShowGoogleAssistantSession(
+            tryShowAssistantSession(
                 context = context,
                 logger = logger,
                 source = "${source}_rebuild",
@@ -166,7 +166,7 @@ internal object PowerHooks {
                 force = true,
                 logFailures = false
             ) &&
-            tryShowGoogleAssistantSession(
+            tryShowAssistantSession(
                 context = context,
                 logger = logger,
                 source = "${source}_retry",
@@ -311,7 +311,7 @@ internal object PowerHooks {
         }.getOrDefault(false)
     }
 
-    private fun tryShowGoogleAssistantSession(
+    private fun tryShowAssistantSession(
         context: Context,
         logger: ModuleLogger,
         source: String,
