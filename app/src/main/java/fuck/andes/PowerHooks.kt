@@ -116,9 +116,6 @@ internal object PowerHooks {
             return LaunchResult.NOT_HANDLED
         }
         val googlePreferred = preferredAssistantPackage == ModuleConfig.GOOGLE_PACKAGE
-        if (!googlePreferred) {
-            logger.debug("$source: 检测到 ChatGPT，跳过 Google 专属默认助理自愈逻辑")
-        }
 
         val now = SystemClock.uptimeMillis()
         if (now - lastInterceptUptime <= ModuleConfig.INTERCEPT_DEDUP_WINDOW_MS) {
