@@ -86,7 +86,7 @@ internal object AssistantManager {
         forceRefresh = forceRefresh
     )
 
-    fun showGoogleAssistantSession(
+    fun showAssistantSession(
         context: Context,
         logger: ModuleLogger,
         source: String,
