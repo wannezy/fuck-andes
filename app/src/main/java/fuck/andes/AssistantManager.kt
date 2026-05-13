@@ -86,6 +86,9 @@ internal object AssistantManager {
         forceRefresh = forceRefresh
     )
 
+    fun resolveConfiguredAssistantPackage(context: Context): String? =
+        resolveConfiguredAssistantPackageForUser(context.contentResolver, resolveCurrentUserId())
+
     fun showAssistantSession(
         context: Context,
         logger: ModuleLogger,
@@ -271,6 +274,13 @@ internal object AssistantManager {
             userId == lastVerifiedUserId &&
             now - lastVerifiedUptime < CONFIG_VERIFY_COOLDOWN_MS
         ) {
+            return true
+        }
+
+        val googleSelected = resolveConfiguredAssistantPackageForUser(context.contentResolver, userId) ==
+            ModuleConfig.GOOGLE_PACKAGE || hasGoogleAssistantRole(context, userId)
+        if (!googleSelected) {
+            markVerified(userId, now)
             return true
         }
 
@@ -513,6 +523,17 @@ internal object AssistantManager {
                 ModuleConfig.SECURE_VOICE_INTERACTION_SERVICE,
                 userId
             ) == ModuleConfig.GOOGLE_ASSISTANT_COMPONENT
+    }
+
+    private fun resolveConfiguredAssistantPackageForUser(
+        resolver: ContentResolver,
+        userId: Int
+    ): String? {
+        val configuredAssistant = getSecureStringForUser(resolver, ModuleConfig.SECURE_ASSISTANT, userId)
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?: return null
+        return configuredAssistant.substringBefore('/').takeIf { it.isNotEmpty() }
     }
 
     private fun getSecureStringForUser(

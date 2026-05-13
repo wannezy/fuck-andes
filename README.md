@@ -1,6 +1,6 @@
 # FuckAndes
 
-干掉 ColorOS 小布助手。电源键长按优先唤起 ChatGPT 助手（未安装时回退 Gemini），手势条长按和双指识屏换成一圈即搜。
+干掉 ColorOS 小布助手。电源键长按优先唤起系统默认数字助理（兼容 ChatGPT/Gemini 及其它默认助手），手势条长按和双指识屏换成一圈即搜。
 
 一个基于 libxposed API 101 的极简 Xposed 模块。
 
@@ -12,7 +12,7 @@
 
 AI 助手的上限首先由底座模型决定，尤其手机这种高频图片输入、多模态交互场景。与其堆一堆花哨功能，不如先接入一个多模态能力正常的第三方模型做保底；用户买单的是体验，不是“自研”叙事或 PPT。
 
-1. **电源键长按** —— 不再走小布，优先唤起 ChatGPT 助手；未安装 ChatGPT 时自动回退 Google Gemini。模块接管入口后会优先走 `voiceinteraction`；当回退到 Google 且默认助理被系统改写时，仍会自动恢复绑定并在 `voiceinteraction` 重建期间做一次性延迟重试，避免第一次长按只打开 Google App 或完全无响应。
+1. **电源键长按** —— 不再走小布，优先唤起系统当前默认数字助理（支持 ChatGPT/Gemini 及其它默认助手）。模块接管入口后会优先走 `voiceinteraction`；当默认是 Google 且默认助理被系统改写时，仍会自动恢复绑定并在 `voiceinteraction` 重建期间做一次性延迟重试，避免第一次长按只打开 Google App 或完全无响应。
 2. **手势条长按 / 双指识屏** —— 拦截小布识屏，改为触发一圈即搜。同时在 Google 进程内伪装设备为 Samsung S24 Ultra，以放开一圈即搜能力。
 3. **Google 设备资格补齐** —— 在 Google App 进程内补齐 `ro.opa.eligible_device` 和 Google Experience feature，减少非完整 GMS 机型上 Gemini/Assistant 能力被降级的概率。
 4. **锁屏唤醒后进入语音输入** —— Gemini 浮窗从锁屏唤起时，如果 Google 没有稳定进入语音识别态，模块会短延迟补发一次 `ACTION_VOICE_COMMAND`，相当于自动点麦克风。
@@ -65,7 +65,7 @@ Release 构建开启 R8 minify 与资源收缩，使用 `proguard-android-optimi
 
 ## 预期行为
 
-正常情况下，第一次长按电源键就能直接唤起 ChatGPT 助手（未安装时唤起 Gemini）。
+正常情况下，第一次长按电源键就能直接唤起系统默认数字助理。
 
 如果模块刚把"默认数字助理应用"切回 Google，系统还在异步重建相关服务，模块会尽量拦截掉这期间失败的调用流程（避免它傻傻地回退去打开 Google App 主界面），并在后台短时间内发起最多 3 次的延迟重试（从 1.2 秒起步）。实测即便在这种刚恢复配置的情况下，第一次长按通常也能顺利拉起 Gemini 浮窗。
 

@@ -112,7 +112,7 @@ internal object PowerHooks {
         if (preferredAssistantPackage == null) {
             logger.warnThrottled(
                 "${source}_assistant_missing",
-                "$source: 未安装 ChatGPT/Google，回退原逻辑"
+                "$source: 未检测到可用默认助理，回退原逻辑"
             )
             return LaunchResult.NOT_HANDLED
         }
@@ -258,11 +258,18 @@ internal object PowerHooks {
     }
 
     private fun resolvePreferredAssistantPackage(context: Context): String? {
-        val chatGptInstalled = HookSupport.isPackageInstalled(context, ModuleConfig.CHATGPT_PACKAGE)
-        if (chatGptInstalled &&
-            (isAssistantConfiguredForPackage(context, ModuleConfig.CHATGPT_PACKAGE) ||
-                supportsAssistantActivity(context, ModuleConfig.CHATGPT_PACKAGE))
+        val configuredAssistantPackage = AssistantManager.resolveConfiguredAssistantPackage(context)
+        if (configuredAssistantPackage != null &&
+            HookSupport.isPackageInstalled(context, configuredAssistantPackage) &&
+            (isAssistantConfiguredForPackage(context, configuredAssistantPackage) ||
+                configuredAssistantPackage == ModuleConfig.GOOGLE_PACKAGE ||
+                supportsAssistantActivity(context, configuredAssistantPackage))
         ) {
+            return configuredAssistantPackage
+        }
+
+        val chatGptInstalled = HookSupport.isPackageInstalled(context, ModuleConfig.CHATGPT_PACKAGE)
+        if (chatGptInstalled && supportsAssistantActivity(context, ModuleConfig.CHATGPT_PACKAGE)) {
             return ModuleConfig.CHATGPT_PACKAGE
         }
 
