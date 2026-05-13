@@ -270,17 +270,17 @@ internal object AssistantManager {
         forceRefresh: Boolean = false
     ): Boolean {
         val now = SystemClock.uptimeMillis()
+        val googleSelected = resolveConfiguredAssistantPackageForUser(context.contentResolver, userId) ==
+            ModuleConfig.GOOGLE_PACKAGE
+        if (!googleSelected) {
+            // 仅对 Google 做 role/secure 自愈，避免覆盖用户已设置的其他默认助理。
+            return false
+        }
         if (!forceRefresh &&
             userId == lastVerifiedUserId &&
             now - lastVerifiedUptime < CONFIG_VERIFY_COOLDOWN_MS
         ) {
-            return true
-        }
-
-        val googleSelected = resolveConfiguredAssistantPackageForUser(context.contentResolver, userId) ==
-            ModuleConfig.GOOGLE_PACKAGE || hasGoogleAssistantRole(context, userId)
-        if (!googleSelected) {
-            markVerified(userId, now)
+            // 命中全局冷却：避免在开机/解锁等高频阶段重复触发反射与系统写入。
             return true
         }
 
@@ -529,6 +529,8 @@ internal object AssistantManager {
         resolver: ContentResolver,
         userId: Int
     ): String? {
+        // Settings.Secure.assistant 常见格式为 "package/class"（如 "com.foo/.AssistService"）；
+        // 空值、纯 "/" 或前缀包名为空等异常格式都会返回 null。
         val configuredAssistant = getSecureStringForUser(resolver, ModuleConfig.SECURE_ASSISTANT, userId)
             ?.trim()
             ?.takeIf { it.isNotEmpty() }

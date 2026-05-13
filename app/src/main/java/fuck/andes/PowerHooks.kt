@@ -5,7 +5,6 @@ import android.content.Intent
 import android.os.Handler
 import android.os.Message
 import android.os.SystemClock
-import android.provider.Settings
 import io.github.libxposed.api.XposedModule
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -108,7 +107,7 @@ internal object PowerHooks {
             return LaunchResult.NOT_HANDLED
         }
 
-        val preferredAssistantPackage = resolvePreferredAssistantPackage(context)
+        val preferredAssistantPackage = resolvePreferredAssistantPackage(context, logger)
         if (preferredAssistantPackage == null) {
             logger.warnThrottled(
                 "${source}_assistant_missing",
@@ -257,20 +256,20 @@ internal object PowerHooks {
         }
     }
 
-    private fun resolvePreferredAssistantPackage(context: Context): String? {
+    private fun resolvePreferredAssistantPackage(context: Context, logger: ModuleLogger): String? {
         val configuredAssistantPackage = AssistantManager.resolveConfiguredAssistantPackage(context)
-        if (configuredAssistantPackage != null &&
-            HookSupport.isPackageInstalled(context, configuredAssistantPackage) &&
-            (isAssistantConfiguredForPackage(context, configuredAssistantPackage) ||
-                configuredAssistantPackage == ModuleConfig.GOOGLE_PACKAGE ||
-                supportsAssistantActivity(context, configuredAssistantPackage))
-        ) {
-            return configuredAssistantPackage
-        }
-
-        val chatGptInstalled = HookSupport.isPackageInstalled(context, ModuleConfig.CHATGPT_PACKAGE)
-        if (chatGptInstalled && supportsAssistantActivity(context, ModuleConfig.CHATGPT_PACKAGE)) {
-            return ModuleConfig.CHATGPT_PACKAGE
+        if (configuredAssistantPackage != null) {
+            val configuredInstalled = HookSupport.isPackageInstalled(context, configuredAssistantPackage)
+            val configuredSupportsAssistant = configuredInstalled &&
+                supportsAssistantActivity(context, configuredAssistantPackage)
+            if (configuredInstalled && configuredSupportsAssistant) {
+                return configuredAssistantPackage
+            }
+            logger.warnThrottled(
+                "configured_assistant_unavailable",
+                "已配置默认助理 $configuredAssistantPackage 但当前不可用(installed=$configuredInstalled, supportsAssistant=$configuredSupportsAssistant)，保持回退原逻辑"
+            )
+            return null
         }
 
         return when {
@@ -285,13 +284,6 @@ internal object PowerHooks {
         val voiceIntent = Intent(Intent.ACTION_VOICE_COMMAND).setPackage(packageName)
         return HookSupport.resolvesActivity(context, assistIntent) ||
             HookSupport.resolvesActivity(context, voiceIntent)
-    }
-
-    private fun isAssistantConfiguredForPackage(context: Context, packageName: String): Boolean {
-        val configuredAssistant = runCatching {
-            Settings.Secure.getString(context.contentResolver, ModuleConfig.SECURE_ASSISTANT)
-        }.getOrNull()
-        return configuredAssistant == packageName || configuredAssistant?.startsWith("$packageName/") == true
     }
 
     private fun finalizeSuccessfulLaunch(
